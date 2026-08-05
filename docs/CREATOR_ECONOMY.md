@@ -25,10 +25,21 @@ Ocean Stardust kills / Roulette
 
 VIP messaging can promise “priority review” at €20 without lowering the €10 gate.
 
+## Premium layer — Pérolas / Pearls
+
+```
+Stripe / real money ──► PÉROLAS ──► extra spins · raffle flips · exchange → Sharkcoins
+                     └──► Ad-free plans (1d / 7d / 30d / lifetime)
+```
+
+- Name follows UI language (Pearls / Pérolas / Perlas / …)
+- Soft sink that does **not** inflate Cash directly (house-safe)
+- Ad-free plans protect UX for paying users while keeping Stripe revenue
+
 ## Creator revenue streams
 
-1. **Rewarded ads** — spins, lives (never trap UX)  
-2. **Galaxy Store IAP** — lives, spins, Sharkcoin vault, Points pack, VIP  
+1. **Rewarded ads** — spins, lives, raffle flips (never trap UX)  
+2. **Stripe / Galaxy IAP** — Pearls packs, ad-free, lives, spins, VIP  
 3. **House edge** on conversions (you keep the majority of “earned” value)  
 4. **Float** — Cash sits until €10; many users never cash out  
 
