@@ -131,7 +131,7 @@ class AppState extends ChangeNotifier {
         email: 'teste_samsung@email.com',
         password: 'SenhaTeste123',
         displayName: 'Samsung Reviewer',
-        cash: 0.40,
+        cash: 1.50,
         sharks: 120,
         points: 250,
         freeSpins: EconomyConfig.dailyFreeSpins + 3,
@@ -292,10 +292,30 @@ class AppState extends ChangeNotifier {
     return l10n.t('converted', vars: {'s': '$used', 'c': gained.toStringAsFixed(2)});
   }
 
+  /// Locks cash while a real payout is submitted to the backend.
+  Future<String?> lockCashForCashout(double amount) async {
+    if (user == null) return l10n.t('cashout_need');
+    final a = double.parse(amount.toStringAsFixed(2));
+    if (a < EconomyConfig.minCashEuro) return l10n.t('cashout_need');
+    if (user!.cash + 0.001 < a) return l10n.t('not_enough');
+    user!.cash = double.parse((user!.cash - a).toStringAsFixed(2));
+    user!.points += 25;
+    await _persistUser();
+    notifyListeners();
+    return null;
+  }
+
+  Future<void> refundCashout(double amount) async {
+    if (user == null) return;
+    user!.cash = double.parse((user!.cash + amount).toStringAsFixed(2));
+    await _persistUser();
+    notifyListeners();
+  }
+
+  @Deprecated('Use CashoutScreen + lockCashForCashout')
   Future<String?> requestCashout() async {
     if (user == null) return l10n.t('cashout_need');
     if (user!.cash < EconomyConfig.minCashEuro) return l10n.t('cashout_need');
-    // Soft lock: deduct to pending — keeps house float realistic for review demos.
     user!.cash = double.parse((user!.cash - EconomyConfig.minCashEuro).toStringAsFixed(2));
     user!.points += 50;
     await _persistUser();

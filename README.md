@@ -51,6 +51,26 @@ Outputs:
 - `build/app/outputs/flutter-apk/app-release.apk`
 - `build/app/outputs/bundle/release/app-release.aab`
 
+## Real cashouts (PayPal & more)
+
+Users convert **Sharks → Cash**, then withdraw from **€1.00** via:
+
+PayPal (auto API) · Skrill · Revolut · Wise · Bank SEPA · USDT TRC20
+
+See **`docs/PAYOUTS.md`** and run the API:
+
+```bash
+cd backend
+cp .env.example .env   # add PAYPAL_CLIENT_ID / SECRET
+npm install && npm start
+```
+
+Point the app at your API:
+
+```bash
+flutter run --dart-define=CASHARK_API_URL=https://YOUR-API-HOST
+```
+
 ## Privacy Policy
 
 Replace `https://cashark.app/privacy` in the Profile screen with your hosted policy before submission. A starter template is in `docs/PRIVACY_POLICY.md`.

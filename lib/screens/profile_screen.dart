@@ -7,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../services/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/currency_bar.dart';
+import 'cashout_screen.dart';
 import 'language_screen.dart';
 import 'login_screen.dart';
 
@@ -75,11 +76,11 @@ class ProfileScreen extends StatelessWidget {
             Text(l.t('min_cash'), style: GoogleFonts.fredoka(color: Colors.white70, fontSize: 13)),
             const SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () async {
-                final msg = await state.requestCashout();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg ?? '')));
-                }
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.mint),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CashoutScreen()),
+                );
               },
               child: Text(l.t('cashout')),
             ),

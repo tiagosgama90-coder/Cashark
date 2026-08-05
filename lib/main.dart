@@ -6,6 +6,7 @@ import 'l10n/app_localizations.dart';
 import 'screens/splash_screen.dart';
 import 'services/ads_service.dart';
 import 'services/app_state.dart';
+import 'services/payout_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -21,7 +22,9 @@ Future<void> main() async {
 
   final appState = AppState();
   final ads = AdsService();
+  final payouts = PayoutService();
   await appState.init();
+  await payouts.init();
   // Ads init non-blocking so offline review still works.
   ads.init();
 
@@ -30,6 +33,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider.value(value: appState),
         ChangeNotifierProvider.value(value: ads),
+        ChangeNotifierProvider.value(value: payouts),
       ],
       child: const CasharkApp(),
     ),
