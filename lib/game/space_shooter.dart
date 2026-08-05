@@ -327,10 +327,6 @@ class _SpaceShooterGameState extends State<SpaceShooterGame>
     final l = state.l10n;
     final lives = state.user?.lives ?? 0;
 
-    if (stars.isEmpty && view != Size.zero) {
-      _seedWorld();
-    }
-
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -365,64 +361,75 @@ class _SpaceShooterGameState extends State<SpaceShooterGame>
                 child: LayoutBuilder(
                   builder: (context, c) {
                     view = Size(c.maxWidth, c.maxHeight);
-                    return GestureDetector(
-                      onPanUpdate: _onPan,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          CustomPaint(
-                            painter: _StardustPainter(
-                              project: _project,
-                              scaleOf: _scale,
-                              rings: rings,
-                              stars: stars,
-                              enemies: enemies,
-                              bullets: bullets,
-                              sparks: sparks,
-                              shipX: shipX,
-                              shipY: shipY,
-                              shipZ: shipZ,
-                              shipBank: shipBank,
-                              time: _time,
-                            ),
-                          ),
-                          if (phase == _Phase.ready || phase == _Phase.over)
-                            Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (phase == _Phase.over) ...[
-                                    Text(l.t('game_over'),
-                                        style: GoogleFonts.fredoka(
-                                            color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800)),
-                                    Text('${l.t('kills')}: $sessionKills',
-                                        style: GoogleFonts.fredoka(color: Colors.white70, fontSize: 18)),
-                                    const SizedBox(height: 14),
-                                  ] else ...[
-                                    Text('STARDUST SHARK',
-                                        style: GoogleFonts.fredoka(
-                                            color: const Color(0xFFFF6B1A),
-                                            fontSize: 28,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 1.2)),
-                                    Text('3D rail · drag to steer',
-                                        style: GoogleFonts.fredoka(color: Colors.white70, fontSize: 14)),
-                                    const SizedBox(height: 18),
-                                  ],
-                                  _StartButton(label: l.t('start'), onTap: _start),
-                                  if (lives <= 0) ...[
-                                    const SizedBox(height: 12),
-                                    TextButton(
-                                      onPressed: _showBuyLives,
-                                      child: Text(l.t('buy_lives'),
-                                          style: GoogleFonts.fredoka(color: AppColors.gold, fontSize: 16)),
-                                    ),
-                                  ],
-                                ],
+                    if (stars.isEmpty && view != Size.zero) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted && stars.isEmpty) {
+                          setState(_seedWorld);
+                        }
+                      });
+                    }
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // 3D world — pan only while playing so START stays tappable
+                        Positioned.fill(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onPanUpdate: phase == _Phase.playing ? _onPan : null,
+                            child: CustomPaint(
+                              painter: _StardustPainter(
+                                project: _project,
+                                scaleOf: _scale,
+                                rings: rings,
+                                stars: stars,
+                                enemies: enemies,
+                                bullets: bullets,
+                                sparks: sparks,
+                                shipX: shipX,
+                                shipY: shipY,
+                                shipZ: shipZ,
+                                shipBank: shipBank,
+                                time: _time,
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                        ),
+                        if (phase == _Phase.ready || phase == _Phase.over)
+                          Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (phase == _Phase.over) ...[
+                                  Text(l.t('game_over'),
+                                      style: GoogleFonts.fredoka(
+                                          color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800)),
+                                  Text('${l.t('kills')}: $sessionKills',
+                                      style: GoogleFonts.fredoka(color: Colors.white70, fontSize: 18)),
+                                  const SizedBox(height: 14),
+                                ] else ...[
+                                  Text('STARDUST SHARK',
+                                      style: GoogleFonts.fredoka(
+                                          color: const Color(0xFFFF6B1A),
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 1.2)),
+                                  Text('3D rail · arrasta para pilotar a nave-tubarão',
+                                      style: GoogleFonts.fredoka(color: Colors.white70, fontSize: 14)),
+                                  const SizedBox(height: 18),
+                                ],
+                                _StartButton(label: l.t('start'), onTap: _start),
+                                if (lives <= 0) ...[
+                                  const SizedBox(height: 12),
+                                  TextButton(
+                                    onPressed: _showBuyLives,
+                                    child: Text(l.t('buy_lives'),
+                                        style: GoogleFonts.fredoka(color: AppColors.gold, fontSize: 16)),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                      ],
                     );
                   },
                 ),
