@@ -1,78 +1,54 @@
-/// Cashark economy — addictive loops, progressive grind, house edge for the creator.
-///
-/// Flow:  Points  →  Sharkcoins  →  Cash (€ →  real payout (≥ €10)
-///
-/// Design goals:
-/// - Players feel constant progress (points drip every kill / spin)
-/// - Cashout is real but slow enough that ads + shop fund the pool
-/// - Difficulty rises so continues / lives / ads stay valuable
+/// Cashark economy — Points → Sharkcoins → Cash; Pearls = premium.
 class EconomyConfig {
-  /// Minimum real cashout. €10 balances player appeal vs creator risk/fraud.
-  /// (€5 burns float too fast; €20 scares new users.)
   static const double minCashEuro = 10.0;
-
-  /// Priority cashout tier (optional UX) — same balance, faster review messaging.
   static const double priorityCashoutEuro = 20.0;
 
-  // ── Points → Sharkcoins ─────────────────────────────────────────────
-  /// Spend this many points to mint Sharkcoins.
   static const int pointsPerConversion = 100;
-
-  /// Sharkcoins granted per points block (house keeps ~half the "felt" value).
   static const int sharkcoinsFromPoints = 8;
 
-  // ── Sharkcoins → Cash ───────────────────────────────────────────────
-  /// Sharkcoins needed per cash conversion block.
   static const int sharksPerConversion = 250;
-
-  /// Cash per block. 250 SC → €0.40 ⇒ need **6 250 SC** (~78 125 points) for €10.
   static const double cashPerConversion = 0.40;
-
-  /// Shop turbo: one boosted conversion.
   static const double boostedConversionCash = 0.65;
 
-  // ── Roulette (dynamic wheel) ────────────────────────────────────────
-  /// Prefer Sharkcoin wins (slow convert) over direct Cash drips.
   static const double sharkWeight = 0.55;
   static const double coinWeight = 0.45;
-
   static const int sharksWinMin = 3;
   static const int sharksWinMax = 10;
-
-  /// Tiny cash drips — never a shortcut past the €10 gate.
   static const double cashWinMin = 0.01;
   static const double cashWinMax = 0.05;
 
   static const int dailyFreeSpins = 5;
   static const int adBonusSpins = 2;
-
-  /// Soft daily cap on roulette Cash to protect the float.
   static const double dailyRouletteCashCap = 0.35;
 
-  // ── Ocean Stardust game ─────────────────────────────────────────────
   static const int maxLives = 3;
-
-  /// Base Sharkcoins per kill (scaled by wave difficulty in-game).
   static const int casharkPerKill = 1;
-
-  /// Points per kill (primary addictive meter).
   static const int pointsPerKill = 12;
-
   static const double lifePriceCash = 0.49;
   static const int lifePriceSharks = 60;
   static const int lifePackSize = 3;
-  static const double lifePackPriceIap = 1.99;
 
-  /// Wave difficulty: every N kills, speed/HP ramp.
+  static const double luckyCoinWeight = 0.68;
+  static const int luckySpinsCount = 5;
+
   static const int killsPerWave = 8;
   static const double difficultySpeedPerWave = 0.12;
   static const double maxDifficultyMul = 2.8;
 
-  // ── Shop boosts ─────────────────────────────────────────────────────
-  static const double luckyCoinWeight = 0.68;
-  static const int luckySpinsCount = 5;
+  /// Premium currency (Pérolas / Pearls).
+  static const int pearlsPerSmallPack = 50;
+  static const int pearlsPerMediumPack = 100;
+  static const int pearlsPerLargePack = 300;
+  static const double pearlsSmallPrice = 2.99;
+  static const double pearlsMediumPrice = 6.49;
+  static const double pearlsLargePrice = 14.99;
 
-  /// Alias used across code — Sharkcoins balance field name stays `sharks`.
+  /// Pearl sinks (intelligent spend loops).
+  static const int pearlsForExtraSpin = 5;
+  static const int pearlsForRaffleFlip = 3;
+  static const int pearlsToSharkcoinsRate = 10; // 1 pearl → 10 SC
+  static const int sharkcoinsPerPearlBuy = 10;
+
   static const String currencyName = 'Sharkcoins';
 }
 
@@ -85,6 +61,7 @@ class ShopItem {
   final String icon;
   final double priceEuro;
   final int? priceSharks;
+  final int? pricePearls;
   final bool consumable;
   final String kind;
 
@@ -95,11 +72,13 @@ class ShopItem {
     required this.icon,
     required this.priceEuro,
     this.priceSharks,
+    this.pricePearls,
     this.consumable = true,
     required this.kind,
   });
 }
 
+/// Classic boost packs (Stripe / Cash / Sharkcoins).
 const shopCatalog = <ShopItem>[
   ShopItem(
     id: 'lives_pack',
@@ -168,4 +147,44 @@ const shopCatalog = <ShopItem>[
     priceEuro: 3.99,
     kind: 'bundle',
   ),
+];
+
+/// Ad-removal premium (like reference apps) — paid in EUR via Stripe.
+class AdFreePlan {
+  final String id;
+  final String titleKey;
+  final int days; // 0 = lifetime
+  final double priceEuro;
+  const AdFreePlan({
+    required this.id,
+    required this.titleKey,
+    required this.days,
+    required this.priceEuro,
+  });
+}
+
+const adFreePlans = <AdFreePlan>[
+  AdFreePlan(id: 'adfree_1d', titleKey: 'adfree_1d', days: 1, priceEuro: 2.09),
+  AdFreePlan(id: 'adfree_7d', titleKey: 'adfree_7d', days: 7, priceEuro: 2.99),
+  AdFreePlan(id: 'adfree_30d', titleKey: 'adfree_30d', days: 30, priceEuro: 7.49),
+  AdFreePlan(id: 'adfree_life', titleKey: 'adfree_life', days: 0, priceEuro: 13.99),
+];
+
+class PearlPack {
+  final String id;
+  final int pearls;
+  final double priceEuro;
+  final int? discountPercent;
+  const PearlPack({
+    required this.id,
+    required this.pearls,
+    required this.priceEuro,
+    this.discountPercent,
+  });
+}
+
+const pearlPacks = <PearlPack>[
+  PearlPack(id: 'pearls_50', pearls: 50, priceEuro: 2.99),
+  PearlPack(id: 'pearls_100', pearls: 100, priceEuro: 6.49, discountPercent: 40),
+  PearlPack(id: 'pearls_300', pearls: 300, priceEuro: 14.99, discountPercent: 35),
 ];

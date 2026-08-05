@@ -28,6 +28,15 @@ class AppColors {
     end: Alignment.bottomCenter,
     colors: [Color(0xFFFFB347), Color(0xFFFF7A18), Color(0xFFFF4E00)],
   );
+
+  /// Soft ocean sky for Spin / Raffle / Wallet (still branded with orange CTAs).
+  static const oceanGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF7EC8F8), Color(0xFFB8E0FF), Color(0xFFE8F6FF)],
+  );
+
+  static const deepCard = Color(0xFF1B2A4A);
 }
 
 ThemeData buildCasharkTheme() {

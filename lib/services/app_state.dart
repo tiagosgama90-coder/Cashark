@@ -14,6 +14,7 @@ class UserProfile {
   double cash;
   int sharks;
   int points;
+  int pearls;
   int freeSpins;
   int lives;
   int spinsPlayed;
@@ -24,6 +25,10 @@ class UserProfile {
   String lastSpinDay;
   double dailyRouletteCash;
   String lastRouletteCashDay;
+  String adFreeUntil; // ISO date or 'lifetime'
+  int dailyStreak;
+  String lastStreakDay;
+  bool googleLinked;
   AppLang lang;
 
   UserProfile({
@@ -33,6 +38,7 @@ class UserProfile {
     this.cash = 0.08,
     this.sharks = 25,
     this.points = 40,
+    this.pearls = 3,
     this.freeSpins = EconomyConfig.dailyFreeSpins,
     this.lives = EconomyConfig.maxLives,
     this.spinsPlayed = 0,
@@ -43,8 +49,19 @@ class UserProfile {
     this.lastSpinDay = '',
     this.dailyRouletteCash = 0,
     this.lastRouletteCashDay = '',
+    this.adFreeUntil = '',
+    this.dailyStreak = 0,
+    this.lastStreakDay = '',
+    this.googleLinked = false,
     this.lang = AppLang.pt,
   });
+
+  bool get isAdFree {
+    if (adFreeUntil == 'lifetime' || vip) return true;
+    if (adFreeUntil.isEmpty) return false;
+    final until = DateTime.tryParse(adFreeUntil);
+    return until != null && until.isAfter(DateTime.now());
+  }
 
   Map<String, dynamic> toJson() => {
         'email': email,
@@ -53,6 +70,7 @@ class UserProfile {
         'cash': cash,
         'sharks': sharks,
         'points': points,
+        'pearls': pearls,
         'freeSpins': freeSpins,
         'lives': lives,
         'spinsPlayed': spinsPlayed,
@@ -63,6 +81,10 @@ class UserProfile {
         'lastSpinDay': lastSpinDay,
         'dailyRouletteCash': dailyRouletteCash,
         'lastRouletteCashDay': lastRouletteCashDay,
+        'adFreeUntil': adFreeUntil,
+        'dailyStreak': dailyStreak,
+        'lastStreakDay': lastStreakDay,
+        'googleLinked': googleLinked,
         'lang': lang.name,
       };
 
@@ -73,6 +95,7 @@ class UserProfile {
         cash: (j['cash'] as num?)?.toDouble() ?? 0,
         sharks: j['sharks'] as int? ?? 0,
         points: j['points'] as int? ?? 0,
+        pearls: j['pearls'] as int? ?? 0,
         freeSpins: j['freeSpins'] as int? ?? 0,
         lives: j['lives'] as int? ?? 3,
         spinsPlayed: j['spinsPlayed'] as int? ?? 0,
@@ -83,6 +106,10 @@ class UserProfile {
         lastSpinDay: j['lastSpinDay'] as String? ?? '',
         dailyRouletteCash: (j['dailyRouletteCash'] as num?)?.toDouble() ?? 0,
         lastRouletteCashDay: j['lastRouletteCashDay'] as String? ?? '',
+        adFreeUntil: j['adFreeUntil'] as String? ?? '',
+        dailyStreak: j['dailyStreak'] as int? ?? 0,
+        lastStreakDay: j['lastStreakDay'] as String? ?? '',
+        googleLinked: j['googleLinked'] as bool? ?? false,
         lang: AppLang.values.firstWhere(
           (e) => e.name == (j['lang'] as String? ?? 'pt'),
           orElse: () => AppLang.pt,
@@ -142,8 +169,10 @@ class AppState extends ChangeNotifier {
         cash: 2.40,
         sharks: 280,
         points: 520,
+        pearls: 12,
         freeSpins: EconomyConfig.dailyFreeSpins + 3,
         lives: EconomyConfig.maxLives,
+        dailyStreak: 1,
       );
       await _saveUsers(users);
     }
@@ -220,10 +249,58 @@ class AppState extends ChangeNotifier {
     user = u;
     lang = u.lang;
     _refreshDailySpins();
+    _touchStreak();
     await _prefs!.setString(_sessionKey, email);
     await _persistUser();
     notifyListeners();
     return null;
+  }
+
+  /// Google / OAuth-style login — creates account if first time.
+  Future<String?> loginWithGoogle({
+    required String email,
+    required String displayName,
+  }) async {
+    email = email.trim().toLowerCase();
+    if (!_validEmail(email)) return l10n.t('invalid_login');
+    final users = _loadUsers();
+    var u = users[email];
+    if (u == null) {
+      u = UserProfile(
+        email: email,
+        password: 'google_${DateTime.now().millisecondsSinceEpoch}',
+        displayName: displayName.trim().isEmpty ? 'Shark Player' : displayName.trim(),
+        googleLinked: true,
+        lang: lang,
+        pearls: 5,
+      );
+      users[email] = u;
+      await _saveUsers(users);
+    } else {
+      u.googleLinked = true;
+      if (displayName.trim().isNotEmpty) u.displayName = displayName.trim();
+    }
+    user = u;
+    lang = u.lang;
+    _refreshDailySpins();
+    _touchStreak();
+    await _prefs!.setString(_sessionKey, email);
+    await _persistUser();
+    notifyListeners();
+    return null;
+  }
+
+  void _touchStreak() {
+    if (user == null) return;
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    if (user!.lastStreakDay == today) return;
+    final yesterday = DateTime.now().subtract(const Duration(days: 1)).toIso8601String().substring(0, 10);
+    if (user!.lastStreakDay == yesterday) {
+      user!.dailyStreak += 1;
+    } else {
+      user!.dailyStreak = 1;
+    }
+    user!.lastStreakDay = today;
   }
 
   Future<void> logout() async {
@@ -450,6 +527,26 @@ class AppState extends ChangeNotifier {
   /// Called after Stripe Checkout is confirmed paid (no Cash deducted).
   Future<String?> fulfillPaidShopItem(String itemId) async {
     if (user == null) return l10n.t('not_enough');
+
+    for (final p in pearlPacks) {
+      if (p.id == itemId) {
+        _grantShopKind(itemId);
+        user!.points += 40;
+        await _persistUser();
+        notifyListeners();
+        return null;
+      }
+    }
+    for (final p in adFreePlans) {
+      if (p.id == itemId) {
+        _grantShopKind(itemId);
+        user!.points += 40;
+        await _persistUser();
+        notifyListeners();
+        return null;
+      }
+    }
+
     ShopItem? item;
     for (final e in shopCatalog) {
       if (e.id == itemId) {
@@ -496,7 +593,103 @@ class AppState extends ChangeNotifier {
         user!.sharks += 80;
         user!.points += 150;
         break;
+      case 'pearls_50':
+        user!.pearls += 50;
+        break;
+      case 'pearls_100':
+        user!.pearls += 100;
+        break;
+      case 'pearls_300':
+        user!.pearls += 300;
+        break;
+      case 'adfree_1d':
+        _applyAdFree(1);
+        break;
+      case 'adfree_7d':
+        _applyAdFree(7);
+        break;
+      case 'adfree_30d':
+        _applyAdFree(30);
+        break;
+      case 'adfree_life':
+        user!.adFreeUntil = 'lifetime';
+        break;
     }
+  }
+
+  void _applyAdFree(int days) {
+    final now = DateTime.now();
+    DateTime base = now;
+    if (user!.adFreeUntil.isNotEmpty && user!.adFreeUntil != 'lifetime') {
+      final prev = DateTime.tryParse(user!.adFreeUntil);
+      if (prev != null && prev.isAfter(now)) base = prev;
+    }
+    user!.adFreeUntil = base.add(Duration(days: days)).toIso8601String();
+  }
+
+  Future<String?> spendPearlForSpin() async {
+    if (user == null) return l10n.t('not_enough');
+    if (user!.isAdFree) {
+      user!.freeSpins += 1;
+      await _persistUser();
+      notifyListeners();
+      return null;
+    }
+    if (user!.pearls < EconomyConfig.pearlsForExtraSpin) return l10n.t('need_pearls');
+    user!.pearls -= EconomyConfig.pearlsForExtraSpin;
+    user!.freeSpins += 1;
+    await _persistUser();
+    notifyListeners();
+    return null;
+  }
+
+  Future<String?> exchangePearlsToSharkcoins(int pearls) async {
+    if (user == null) return l10n.t('not_enough');
+    if (pearls <= 0 || user!.pearls < pearls) return l10n.t('need_pearls');
+    user!.pearls -= pearls;
+    user!.sharks += pearls * EconomyConfig.pearlsToSharkcoinsRate;
+    await _persistUser();
+    notifyListeners();
+    return l10n.t('pearls_exchanged', vars: {
+      'p': '$pearls',
+      's': '${pearls * EconomyConfig.pearlsToSharkcoinsRate}',
+    });
+  }
+
+  Future<void> grantPearls(int n) async {
+    if (user == null) return;
+    user!.pearls += n;
+    await _persistUser();
+    notifyListeners();
+  }
+
+  Future<void> grantCashBonus(double amount) async {
+    if (user == null || amount <= 0) return;
+    user!.cash = double.parse((user!.cash + amount).toStringAsFixed(2));
+    user!.points += 40;
+    await _persistUser();
+    notifyListeners();
+  }
+
+  Future<String?> activateAdFreePlan(String planId) async {
+    if (user == null) return l10n.t('not_enough');
+    _grantShopKind(planId);
+    await _persistUser();
+    notifyListeners();
+    return null;
+  }
+
+  /// Raffle flip — costs pearls (or free if ad-free via rewarded path handled in UI).
+  Future<bool> flipRaffleTile({required bool usePearl}) async {
+    if (user == null) return false;
+    if (usePearl) {
+      if (user!.pearls < EconomyConfig.pearlsForRaffleFlip) return false;
+      user!.pearls -= EconomyConfig.pearlsForRaffleFlip;
+    }
+    user!.points += 3;
+    await _persistUser();
+    notifyListeners();
+    return true;
   }
 }
 

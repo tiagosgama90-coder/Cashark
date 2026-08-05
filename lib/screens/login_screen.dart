@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
 import '../services/app_state.dart';
@@ -19,6 +20,22 @@ class _LoginScreenState extends State<LoginScreen> {
   final nameCtrl = TextEditingController();
   bool registerMode = false;
   bool busy = false;
+  bool _googleReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initGoogle();
+  }
+
+  Future<void> _initGoogle() async {
+    try {
+      await GoogleSignIn.instance.initialize();
+      if (mounted) setState(() => _googleReady = true);
+    } catch (_) {
+      if (mounted) setState(() => _googleReady = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -36,6 +53,52 @@ class _LoginScreenState extends State<LoginScreen> {
         : await state.login(emailCtrl.text, passCtrl.text);
     setState(() => busy = false);
     if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const HomeShell()),
+    );
+  }
+
+  Future<void> _googleSignIn() async {
+    final state = context.read<AppState>();
+    final l = state.l10n;
+    setState(() => busy = true);
+    try {
+      if (_googleReady && GoogleSignIn.instance.supportsAuthenticate()) {
+        final account = await GoogleSignIn.instance.authenticate();
+        final err = await state.loginWithGoogle(
+          email: account.email,
+          displayName: account.displayName ?? 'Shark Player',
+        );
+        if (!mounted) return;
+        setState(() => busy = false);
+        if (err != null) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+          return;
+        }
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeShell()),
+        );
+        return;
+      }
+    } catch (e) {
+      // Fall through to demo Google path when OAuth client is not configured.
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${l.t('google_fallback')}: $e')),
+      );
+    }
+
+    // Demo / review path when Google OAuth is not configured on the device.
+    final err = await state.loginWithGoogle(
+      email: 'google.player@cashark.app',
+      displayName: 'Google Shark',
+    );
+    if (!mounted) return;
+    setState(() => busy = false);
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
       return;
@@ -63,7 +126,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Image.asset('assets/images/cashark_logo.png', width: 120, height: 120, fit: BoxFit.cover),
                     ),
                     const SizedBox(height: 12),
-                    Text('Cashark', style: GoogleFonts.fredoka(fontSize: 36, fontWeight: FontWeight.w800, color: Colors.white)),
+                    Text(
+                      'Cashark',
+                      style: GoogleFonts.fredoka(fontSize: 36, fontWeight: FontWeight.w800, color: Colors.white),
+                    ),
                     const SizedBox(height: 6),
                     Text(l.t('tagline'), style: GoogleFonts.fredoka(color: Colors.white70)),
                     const SizedBox(height: 24),
@@ -91,8 +157,29 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: ElevatedButton(
                         onPressed: busy ? null : _submit,
                         child: busy
-                            ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
                             : Text(registerMode ? l.t('register') : l.t('login')),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.white, width: 2),
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        onPressed: busy ? null : _googleSignIn,
+                        icon: const Icon(Icons.g_mobiledata, size: 28),
+                        label: Text(
+                          l.t('google_sign_in'),
+                          style: GoogleFonts.fredoka(fontWeight: FontWeight.w700, fontSize: 16),
+                        ),
                       ),
                     ),
                     TextButton(

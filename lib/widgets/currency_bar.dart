@@ -17,10 +17,10 @@ class CurrencyBar extends StatelessWidget {
       children: [
         Expanded(
           child: _Chip(
-            emoji: '🪙',
+            emoji: '💵',
             label: l.t('cash'),
             value: '€${u.cash.toStringAsFixed(2)}',
-            colors: const [AppColors.gold, AppColors.goldDeep],
+            colors: const [AppColors.mint, Color(0xFF00A844)],
           ),
         ),
         const SizedBox(width: 8),
@@ -28,21 +28,27 @@ class CurrencyBar extends StatelessWidget {
           child: _Chip(
             emoji: '🦈',
             label: l.t('sharks'),
-            value: '${u.sharks}',
-            colors: const [AppColors.sky, AppColors.skyDeep],
+            value: _compact(u.sharks),
+            colors: const [AppColors.gold, AppColors.goldDeep],
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: _Chip(
-            emoji: '⭐',
-            label: l.t('points'),
-            value: '${u.points}',
-            colors: const [AppColors.magenta, AppColors.violet],
+            emoji: '💎',
+            label: l.t('pearls'),
+            value: '${u.pearls}',
+            colors: const [Color(0xFFFF6FAE), Color(0xFFE91E63)],
           ),
         ),
       ],
     );
+  }
+
+  String _compact(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) return '${(n / 1000).toStringAsFixed(n >= 10000 ? 1 : 2)}K';
+    return '$n';
   }
 }
 
@@ -73,8 +79,23 @@ class _Chip extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$emoji $label', style: GoogleFonts.fredoka(color: Colors.white, fontSize: 11)),
-          Text(value, style: GoogleFonts.fredoka(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+          Row(
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.fredoka(color: Colors.white, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          Text(
+            value,
+            style: GoogleFonts.fredoka(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+          ),
         ],
       ),
     );
