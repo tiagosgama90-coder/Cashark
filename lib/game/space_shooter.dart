@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -449,20 +448,17 @@ class _StartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+    return ElevatedButton(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFFF6B1A),
+        foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 18),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFFFFC107), Color(0xFFFF6B1A)]),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(color: const Color(0xFFFF6B1A).withValues(alpha: 0.55), blurRadius: 22, offset: const Offset(0, 8)),
-          ],
-        ),
-        child: Text(label,
-            style: GoogleFonts.fredoka(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        elevation: 8,
       ),
+      child: Text(label,
+          style: GoogleFonts.fredoka(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
     );
   }
 }
@@ -543,18 +539,20 @@ class _StardustPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Nebula glow
-    final nebula = Paint()
-      ..shader = ui.Gradient.radial(
-        Offset(size.width * 0.5, size.height * 0.45),
-        size.shortestSide * 0.7,
-        [
-          const Color(0x66FF6B1A),
-          const Color(0x33297BFF),
-          const Color(0x00000000),
-        ],
-      );
-    canvas.drawRect(Offset.zero & size, nebula);
+    if (size.isEmpty) return;
+
+    // Nebula glow (solid fills — web-safe, no fragile shaders)
+    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFF0A0520));
+    canvas.drawCircle(
+      Offset(size.width * 0.5, size.height * 0.42),
+      size.shortestSide * 0.42,
+      Paint()..color = const Color(0x44FF6B1A),
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.5, size.height * 0.5),
+      size.shortestSide * 0.28,
+      Paint()..color = const Color(0x33297BFF),
+    );
 
     // Stars (far → near for painter's algorithm-ish)
     final sortedStars = [...stars]..sort((a, b) => b.z.compareTo(a.z));
@@ -584,19 +582,16 @@ class _StardustPainter extends CustomPainter {
     for (final b in bullets) {
       final p = project(b.x, b.y, b.z);
       final sc = scaleOf(b.z);
-      final paint = Paint()
-        ..shader = ui.Gradient.linear(
-          p.translate(0, 10 * sc * 0.05),
-          p.translate(0, -18 * sc * 0.05),
-          const [Color(0x00FFF59D), Color(0xFFFFF176), Color(0xFFFF6B1A)],
-        );
+      final h = (22 * sc * 0.08).clamp(8.0, 28.0);
+      final w = (5 * sc * 0.08).clamp(2.5, 8.0);
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromCenter(center: p, width: 5 * sc * 0.08, height: 22 * sc * 0.08),
+          Rect.fromCenter(center: p, width: w, height: h),
           const Radius.circular(4),
         ),
-        paint,
+        Paint()..color = const Color(0xFFFFF176),
       );
+      canvas.drawCircle(p.translate(0, -h * 0.35), w * 0.7, Paint()..color = const Color(0xFFFF6B1A));
     }
 
     // Sparks
@@ -633,8 +628,7 @@ class _StardustPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = (6 * scaleOf(r.z) * 0.06).clamp(1.5, 5)
-        ..color = color.withValues(alpha: 0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 0.5),
+        ..color = color.withValues(alpha: 0.7),
     );
     // Inner accent
     canvas.drawPath(
@@ -672,15 +666,9 @@ class _StardustPainter extends CustomPainter {
       path.close();
     }
 
-    canvas.drawPath(
-      path,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          c.translate(-s, -s),
-          c.translate(s, s),
-          [color, Color.lerp(color, Colors.white, 0.35)!],
-        ),
-    );
+    final sSafe = s.clamp(6.0, 80.0);
+    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawCircle(c, sSafe * 0.2, Paint()..color = Color.lerp(color, Colors.white, 0.45)!);
     canvas.drawPath(
       path,
       Paint()
@@ -770,13 +758,8 @@ class _StardustPainter extends CustomPainter {
 
     // Engine glow under belly
     final glow = pr(pts['belly']!);
-    canvas.drawCircle(
-      glow.translate(0, 8),
-      14,
-      Paint()
-        ..color = const Color(0xAAFF6B1A)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
-    );
+    canvas.drawCircle(glow.translate(0, 10), 16, Paint()..color = const Color(0x66FF6B1A));
+    canvas.drawCircle(glow.translate(0, 8), 9, Paint()..color = const Color(0xAAFF8A3D));
     canvas.drawCircle(glow.translate(0, 6), 5, Paint()..color = const Color(0xFFFFF59D));
 
     // Eye
