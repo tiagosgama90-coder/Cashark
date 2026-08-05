@@ -412,7 +412,7 @@ class _SpaceShooterGameState extends State<SpaceShooterGame>
                                           fontSize: 28,
                                           fontWeight: FontWeight.w800,
                                           letterSpacing: 1.2)),
-                                  Text('3D rail · arrasta para pilotar a nave-tubarão',
+                                  Text('Estilo Stardust 3D · arrasta para pilotar o tubarão',
                                       style: GoogleFonts.fredoka(color: Colors.white70, fontSize: 14)),
                                   const SizedBox(height: 18),
                                 ],
@@ -678,20 +678,24 @@ class _StardustPainter extends CustomPainter {
     );
   }
 
-  /// Low-poly 3D shark ship facing into the tunnel (+Z).
+  /// Low-poly 3D shark ship facing into the tunnel (+Z), viewed from behind.
   void _drawSharkShip(Canvas canvas, double x, double y, double z, double bank, double t) {
-    // Local shark mesh points (nose forward +Z, belly -Y).
-    final nose = _V(0, 0.05, 0.95);
-    final tail = _V(0, 0.0, -0.85);
-    final leftWing = _V(-0.75, 0.05, -0.1);
-    final rightWing = _V(0.75, 0.05, -0.1);
-    final dorsal = _V(0, 0.55, 0.05);
-    final belly = _V(0, -0.32, 0.05);
-    final jawL = _V(-0.22, -0.18, 0.55);
-    final jawR = _V(0.22, -0.18, 0.55);
-    final tailL = _V(-0.35, 0.05, -0.95);
-    final tailR = _V(0.35, 0.05, -0.95);
-    final tailTop = _V(0, 0.45, -0.9);
+    // Exaggerated shark silhouette (nose forward +Z, belly -Y, camera behind).
+    const s = 1.35; // overall scale
+    final nose = _V(0, 0.08, 1.15 * s);
+    final headL = _V(-0.28 * s, 0.02, 0.7 * s);
+    final headR = _V(0.28 * s, 0.02, 0.7 * s);
+    final tail = _V(0, 0.02, -1.05 * s);
+    final leftWing = _V(-1.05 * s, -0.02, -0.05 * s); // pectoral
+    final rightWing = _V(1.05 * s, -0.02, -0.05 * s);
+    final dorsal = _V(0, 0.85 * s, 0.1 * s); // tall fin = readable shark cue
+    final belly = _V(0, -0.42 * s, 0.05 * s);
+    final jawL = _V(-0.3 * s, -0.22 * s, 0.75 * s);
+    final jawR = _V(0.3 * s, -0.22 * s, 0.75 * s);
+    final tailL = _V(-0.55 * s, 0.05, -1.2 * s);
+    final tailR = _V(0.55 * s, 0.05, -1.2 * s);
+    final tailTop = _V(0, 0.7 * s, -1.15 * s); // caudal upper lobe
+    final tailBot = _V(0, -0.35 * s, -1.1 * s); // caudal lower lobe
 
     _V xf(_V p) {
       // Bank (roll) + slight idle bob.
@@ -705,6 +709,8 @@ class _StardustPainter extends CustomPainter {
 
     final pts = {
       'nose': xf(nose),
+      'hl': xf(headL),
+      'hr': xf(headR),
       'tail': xf(tail),
       'lw': xf(leftWing),
       'rw': xf(rightWing),
@@ -715,6 +721,7 @@ class _StardustPainter extends CustomPainter {
       'tl': xf(tailL),
       'tr': xf(tailR),
       'tt': xf(tailTop),
+      'tb': xf(tailBot),
     };
 
     Offset pr(_V v) => project(v.x, v.y, v.z);
@@ -742,19 +749,29 @@ class _StardustPainter extends CustomPainter {
       }
     }
 
-    // Draw back faces first (simple painter order).
-    face(['tail', 'tl', 'tt'], const Color(0xFF1565C0));
-    face(['tail', 'tr', 'tt'], const Color(0xFF1976D2));
-    face(['nose', 'lw', 'dorsal'], const Color(0xFF1E88E5));
-    face(['nose', 'rw', 'dorsal'], const Color(0xFF42A5F5));
+    // Draw back faces first (simple painter order) — shark body + fins.
+    face(['tail', 'tl', 'tt'], const Color(0xFF0D47A1));
+    face(['tail', 'tr', 'tt'], const Color(0xFF1565C0));
+    face(['tail', 'tl', 'tb'], const Color(0xFF1976D2));
+    face(['tail', 'tr', 'tb'], const Color(0xFF1E88E5));
+    face(['dorsal', 'hl', 'hr'], const Color(0xFF0D47A1));
+    face(['nose', 'hl', 'dorsal'], const Color(0xFF1E88E5));
+    face(['nose', 'hr', 'dorsal'], const Color(0xFF42A5F5));
     face(['nose', 'jl', 'belly'], const Color(0xFFE3F2FD));
     face(['nose', 'jr', 'belly'], const Color(0xFFBBDEFB));
-    face(['nose', 'lw', 'belly'], const Color(0xFF2196F3));
-    face(['nose', 'rw', 'belly'], const Color(0xFF64B5F6));
+    face(['nose', 'hl', 'jl'], const Color(0xFF64B5F6));
+    face(['nose', 'hr', 'jr'], const Color(0xFF90CAF9));
+    face(['hl', 'lw', 'belly'], const Color(0xFF2196F3));
+    face(['hr', 'rw', 'belly'], const Color(0xFF42A5F5));
+    face(['hl', 'lw', 'dorsal'], const Color(0xFF1565C0));
+    face(['hr', 'rw', 'dorsal'], const Color(0xFF1E88E5));
     face(['dorsal', 'lw', 'tail'], const Color(0xFF0D47A1));
     face(['dorsal', 'rw', 'tail'], const Color(0xFF1565C0));
     face(['belly', 'lw', 'tail'], const Color(0xFF90CAF9));
     face(['belly', 'rw', 'tail'], const Color(0xFF64B5F6));
+    // Pectoral fin accents (makes the shark wings obvious)
+    face(['hl', 'lw', 'tail'], const Color(0xFF0277BD));
+    face(['hr', 'rw', 'tail'], const Color(0xFF0288D1));
 
     // Engine glow under belly
     final glow = pr(pts['belly']!);
