@@ -56,6 +56,13 @@ Outputs:
 **Points → Sharkcoins → Cash → real payout (≥ €10)** via Ocean Stardust + roulette.  
 See `docs/CREATOR_ECONOMY.md` for the house-edge design.
 
+## Stripe (you receive) + PayPal (you pay users)
+
+- **Stripe Checkout** on the Shop → money enters **your** Stripe account (same account as another project is OK)
+- **PayPal Payouts** on cashouts → you pay players (≥ €10)
+
+See `docs/STRIPE.md`.
+
 ## Real cashouts (PayPal & more)
 
 Users convert **Sharkcoins → Cash**, then withdraw from **€10.00** via:

@@ -435,15 +435,39 @@ class AppState extends ChangeNotifier {
       if (cost == null || user!.sharks < cost) return l10n.t('not_enough');
       user!.sharks -= cost;
     } else {
-      // Simulated IAP — real billing wires to Play Billing / Galaxy Store later.
-      // For demo/review, deducting from cash if available else grant as paid unlock.
-      if (user!.cash >= item.priceEuro) {
-        user!.cash = double.parse((user!.cash - item.priceEuro).toStringAsFixed(2));
-      }
-      // Always grant — simulates successful store purchase for review flow.
+      // In-app Cash balance purchase (not Stripe). Stripe uses [fulfillPaidShopItem].
+      if (user!.cash < item.priceEuro) return l10n.t('not_enough');
+      user!.cash = double.parse((user!.cash - item.priceEuro).toStringAsFixed(2));
     }
 
-    switch (item.kind) {
+    _grantShopKind(item.kind);
+    user!.points += 25;
+    await _persistUser();
+    notifyListeners();
+    return null;
+  }
+
+  /// Called after Stripe Checkout is confirmed paid (no Cash deducted).
+  Future<String?> fulfillPaidShopItem(String itemId) async {
+    if (user == null) return l10n.t('not_enough');
+    ShopItem? item;
+    for (final e in shopCatalog) {
+      if (e.id == itemId) {
+        item = e;
+        break;
+      }
+    }
+    if (item == null) return 'UNKNOWN_ITEM';
+    if (item.kind == 'vip' && user!.vip) return l10n.t('owned');
+    _grantShopKind(item.kind);
+    user!.points += 40;
+    await _persistUser();
+    notifyListeners();
+    return null;
+  }
+
+  void _grantShopKind(String kind) {
+    switch (kind) {
       case 'lives':
         user!.lives += EconomyConfig.lifePackSize;
         break;
@@ -473,10 +497,6 @@ class AppState extends ChangeNotifier {
         user!.points += 150;
         break;
     }
-    user!.points += 25;
-    await _persistUser();
-    notifyListeners();
-    return null;
   }
 }
 

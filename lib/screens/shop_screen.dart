@@ -4,16 +4,94 @@ import 'package:provider/provider.dart';
 
 import '../models/economy.dart';
 import '../services/app_state.dart';
+import '../services/stripe_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/currency_bar.dart';
 
-class ShopScreen extends StatelessWidget {
+class ShopScreen extends StatefulWidget {
   const ShopScreen({super.key});
 
-  Future<void> _buy(BuildContext context, ShopItem item, {bool useSharks = false}) async {
+  @override
+  State<ShopScreen> createState() => _ShopScreenState();
+}
+
+class _ShopScreenState extends State<ShopScreen> {
+  String? _lastSessionId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final stripe = context.read<StripeService>();
+      await stripe.refreshHealth();
+      await _claimPending();
+    });
+  }
+
+  Future<void> _claimPending() async {
+    final state = context.read<AppState>();
+    final stripe = context.read<StripeService>();
+    final email = state.user?.email;
+    if (email == null) return;
+
+    // Claim last session if we just returned from Checkout
+    if (_lastSessionId != null) {
+      final sid = _lastSessionId!;
+      final itemId = await stripe.claimSession(sessionId: sid, userEmail: email);
+      if (!mounted) return;
+      if (itemId != null) {
+        final err = await state.fulfillPaidShopItem(itemId);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err ?? state.l10n.t('stripe_ok'))),
+        );
+      }
+      _lastSessionId = null;
+    }
+
+    final pending = await stripe.pendingPurchases(email);
+    if (!mounted) return;
+    for (final p in pending) {
+      final sid = p['id'] as String? ?? p['stripeSessionId'] as String?;
+      if (sid == null) continue;
+      final claimed = await stripe.claimSession(sessionId: sid, userEmail: email);
+      if (!mounted) return;
+      if (claimed != null) {
+        await state.fulfillPaidShopItem(claimed);
+      }
+    }
+    if (!mounted) return;
+    if (pending.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(state.l10n.t('stripe_ok'))),
+      );
+    }
+  }
+
+  Future<void> _buyWithStripe(ShopItem item) async {
+    final state = context.read<AppState>();
+    final stripe = context.read<StripeService>();
+    final l = state.l10n;
+    if (!stripe.configured) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l.t('stripe_off'))));
+      return;
+    }
+    final sessionId = await stripe.startCheckout(userEmail: state.user!.email, item: item);
+    if (!mounted) return;
+    if (sessionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(stripe.lastError ?? l.t('stripe_fail'))),
+      );
+      return;
+    }
+    _lastSessionId = sessionId;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l.t('stripe_opened'))));
+  }
+
+  Future<void> _buyWithCashOrSharks(ShopItem item, {bool useSharks = false}) async {
     final state = context.read<AppState>();
     final err = await state.purchaseShopItem(item, useSharks: useSharks);
-    if (!context.mounted) return;
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(err ?? state.l10n.t('purchase_ok'))),
     );
@@ -22,6 +100,7 @@ class ShopScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final stripe = context.watch<StripeService>();
     final l = state.l10n;
 
     return Container(
@@ -33,15 +112,29 @@ class ShopScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Column(
                 children: [
-                  Text(l.t('shop'), style: GoogleFonts.fredoka(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
-                  const SizedBox(height: 10),
+                  Text(l.t('shop'),
+                      style: GoogleFonts.fredoka(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
+                  const SizedBox(height: 6),
+                  Text(
+                    stripe.configured ? l.t('stripe_on') : l.t('stripe_off'),
+                    style: GoogleFonts.fredoka(color: Colors.white70, fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
                   const CurrencyBar(),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _claimPending,
+                      icon: const Icon(Icons.refresh, color: Colors.white, size: 18),
+                      label: Text(l.t('stripe_claim'), style: GoogleFonts.fredoka(color: Colors.white)),
+                    ),
+                  ),
                 ],
               ),
             ),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 20),
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
                 itemCount: shopCatalog.length,
                 itemBuilder: (context, i) {
                   final item = shopCatalog[i];
@@ -53,7 +146,8 @@ class ShopScreen extends StatelessWidget {
                     [const Color(0xFF40C4FF), const Color(0xFF2979FF)],
                     [const Color(0xFFE040FB), const Color(0xFFAA00FF)],
                     [const Color(0xFFFF6E40), const Color(0xFFFF3D00)],
-                  ][i % 7];
+                    [const Color(0xFF26A69A), const Color(0xFF00897B)],
+                  ][i % 8];
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(14),
@@ -76,9 +170,11 @@ class ShopScreen extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(l.t(item.titleKey),
-                                      style: GoogleFonts.fredoka(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                                      style: GoogleFonts.fredoka(
+                                          color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
                                   Text(l.t(item.descKey),
-                                      style: GoogleFonts.fredoka(color: Colors.white.withValues(alpha: 0.9), fontSize: 13)),
+                                      style: GoogleFonts.fredoka(
+                                          color: Colors.white.withValues(alpha: 0.9), fontSize: 13)),
                                 ],
                               ),
                             ),
@@ -89,10 +185,22 @@ class ShopScreen extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.ink),
-                              onPressed: () => _buy(context, item),
-                              child: Text('${l.t('buy')} €${item.priceEuro.toStringAsFixed(2)}'),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF635BFF),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: stripe.busy ? null : () => _buyWithStripe(item),
+                              icon: const Icon(Icons.credit_card, size: 18),
+                              label: Text('Stripe €${item.priceEuro.toStringAsFixed(2)}'),
+                            ),
+                            OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                side: const BorderSide(color: Colors.white, width: 2),
+                              ),
+                              onPressed: () => _buyWithCashOrSharks(item),
+                              child: Text('${l.t('cash')} €${item.priceEuro.toStringAsFixed(2)}'),
                             ),
                             if (item.priceSharks != null)
                               OutlinedButton(
@@ -100,7 +208,7 @@ class ShopScreen extends StatelessWidget {
                                   foregroundColor: Colors.white,
                                   side: const BorderSide(color: Colors.white, width: 2),
                                 ),
-                                onPressed: () => _buy(context, item, useSharks: true),
+                                onPressed: () => _buyWithCashOrSharks(item, useSharks: true),
                                 child: Text('${item.priceSharks} 🦈'),
                               ),
                           ],
