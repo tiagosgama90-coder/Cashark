@@ -8,7 +8,8 @@ import '../theme/app_theme.dart';
 import 'login_screen.dart';
 
 class LanguageScreen extends StatelessWidget {
-  const LanguageScreen({super.key});
+  final bool fromProfile;
+  const LanguageScreen({super.key, this.fromProfile = false});
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +72,10 @@ class LanguageScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: () {
+                    if (fromProfile) {
+                      Navigator.of(context).pop();
+                      return;
+                    }
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(builder: (_) => const LoginScreen()),
                     );

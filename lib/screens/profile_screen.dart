@@ -87,7 +87,7 @@ class ProfileScreen extends StatelessWidget {
             OutlinedButton(
               style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white)),
               onPressed: () {
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LanguageScreen()));
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LanguageScreen(fromProfile: true)));
               },
               child: Text('${l.t('choose_language')} (${state.lang.flag} ${state.lang.label})'),
             ),
