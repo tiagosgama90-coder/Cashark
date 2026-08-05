@@ -51,9 +51,14 @@ Outputs:
 - `build/app/outputs/flutter-apk/app-release.apk`
 - `build/app/outputs/bundle/release/app-release.aab`
 
+## Economy loop
+
+**Points → Sharkcoins → Cash → real payout (≥ €10)** via Ocean Stardust + roulette.  
+See `docs/CREATOR_ECONOMY.md` for the house-edge design.
+
 ## Real cashouts (PayPal & more)
 
-Users convert **Sharks → Cash**, then withdraw from **€1.00** via:
+Users convert **Sharkcoins → Cash**, then withdraw from **€10.00** via:
 
 PayPal (auto API) · Skrill · Revolut · Wise · Bank SEPA · USDT TRC20
 

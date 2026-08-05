@@ -21,15 +21,23 @@ class RouletteWheel extends StatefulWidget {
   State<RouletteWheel> createState() => _RouletteWheelState();
 }
 
-class _RouletteWheelState extends State<RouletteWheel>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
+class _RouletteWheelState extends State<RouletteWheel> with TickerProviderStateMixin {
+  late final AnimationController _spinCtrl;
+  late final AnimationController _idleCtrl;
   double _turns = 0;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 3200));
+    _spinCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 3400));
+    _idleCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 12))
+      ..addListener(() {
+        if (!_busy && !widget.spinning) {
+          setState(() => _turns = _idleCtrl.value);
+        }
+      })
+      ..repeat();
   }
 
   @override
@@ -41,25 +49,33 @@ class _RouletteWheelState extends State<RouletteWheel>
   }
 
   Future<void> _startSpin() async {
+    _busy = true;
+    _idleCtrl.stop();
     final target = widget.result == RouletteSymbol.coin ? 0.12 : 0.62;
-    final extra = 4 + Random().nextInt(3);
-    final end = _turns.floorToDouble() + extra + target;
-    final anim = Tween<double>(begin: _turns, end: end).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
+    final extra = 5 + Random().nextInt(4);
+    final begin = _turns;
+    final end = begin.floorToDouble() + extra + target;
+    final anim = Tween<double>(begin: begin, end: end).animate(
+      CurvedAnimation(parent: _spinCtrl, curve: Curves.easeOutCubic),
     );
     void listener() => setState(() => _turns = anim.value);
     anim.addListener(listener);
-    _ctrl
+    _spinCtrl
       ..reset()
       ..forward();
-    await Future<void>.delayed(_ctrl.duration!);
+    await Future<void>.delayed(_spinCtrl.duration!);
     anim.removeListener(listener);
+    _busy = false;
+    // Resume idle from current angle
+    _idleCtrl.value = _turns % 1.0;
+    _idleCtrl.repeat();
     widget.onSpinEnd?.call();
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _spinCtrl.dispose();
+    _idleCtrl.dispose();
     super.dispose();
   }
 
@@ -71,6 +87,21 @@ class _RouletteWheelState extends State<RouletteWheel>
       child: Stack(
         alignment: Alignment.center,
         children: [
+          // Soft glow under wheel
+          Container(
+            width: 260,
+            height: 260,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.orange.withValues(alpha: 0.45),
+                  blurRadius: 28,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+          ),
           Transform.rotate(
             angle: _turns * 2 * pi,
             child: CustomPaint(
@@ -84,20 +115,13 @@ class _RouletteWheelState extends State<RouletteWheel>
             height: 64,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [AppColors.gold, AppColors.goldDeep],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  blurRadius: 10,
-                ),
-              ],
+              gradient: const LinearGradient(colors: [AppColors.gold, AppColors.goldDeep]),
               border: Border.all(color: Colors.white, width: 3),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 10),
+              ],
             ),
-            child: const Center(
-              child: Text('🦈', style: TextStyle(fontSize: 28)),
-            ),
+            child: const Center(child: Text('🦈', style: TextStyle(fontSize: 28))),
           ),
         ],
       ),
@@ -110,41 +134,33 @@ class _WheelPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final c = Offset(size.width / 2, size.height / 2);
     final r = size.width / 2;
-    const segments = 8;
+    const segments = 10;
     for (var i = 0; i < segments; i++) {
       final start = -pi / 2 + (i * 2 * pi / segments);
       final isCoin = i.isEven;
       final paint = Paint()
-        ..shader = SweepGradient(
-          startAngle: start,
-          endAngle: start + 2 * pi / segments,
-          colors: isCoin
-              ? [const Color(0xFFFFD54F), const Color(0xFFFF8F00)]
-              : [const Color(0xFF42A5F5), const Color(0xFF1565C0)],
-        ).createShader(Rect.fromCircle(center: c, radius: r));
+        ..color = isCoin ? const Color(0xFFFFB300) : const Color(0xFF1E88E5);
       canvas.drawArc(Rect.fromCircle(center: c, radius: r), start, 2 * pi / segments, true, paint);
 
+      // Highlight wedge
       final mid = start + pi / segments;
       final tx = c.dx + cos(mid) * r * 0.62;
       final ty = c.dy + sin(mid) * r * 0.62;
       final tp = TextPainter(
-        text: TextSpan(
-          text: isCoin ? '🪙' : '🦈',
-          style: const TextStyle(fontSize: 28),
-        ),
+        text: TextSpan(text: isCoin ? '🪙' : '🦈', style: const TextStyle(fontSize: 26)),
         textDirection: TextDirection.ltr,
       )..layout();
-      canvas.save();
-      canvas.translate(tx - tp.width / 2, ty - tp.height / 2);
-      tp.paint(canvas, Offset.zero);
-      canvas.restore();
+      tp.paint(canvas, Offset(tx - tp.width / 2, ty - tp.height / 2));
     }
 
-    final rim = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..color = Colors.white;
-    canvas.drawCircle(c, r - 5, rim);
+    canvas.drawCircle(
+      c,
+      r - 5,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10
+        ..color = Colors.white,
+    );
     canvas.drawCircle(
       c,
       r - 5,

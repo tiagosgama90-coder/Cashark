@@ -64,6 +64,7 @@ class PayoutService extends ChangeNotifier {
     required String destination,
     String? accountName,
   }) async {
+    // Enforce creator-safe minimum (€10).
     if (amountEuro < EconomyConfig.minCashEuro) {
       throw Exception('MIN_AMOUNT');
     }

@@ -12,7 +12,7 @@ Backend that pays real money when users cash out virtual **Cash** (after convert
    - **PayPal** → auto-paid via [PayPal Payouts API](https://developer.paypal.com/docs/api/payments.payouts-batch/v1/) when credentials are set  
    - **Skrill / Revolut / Wise / SEPA / USDT** → queued for you (admin marks `paid` after you send)
 
-Minimum cashout: **€1.00**
+Minimum cashout: **€10.00** (creator-safe gate — see `CREATOR_ECONOMY.md`)
 
 ## Methods included
 

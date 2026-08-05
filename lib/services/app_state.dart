@@ -22,15 +22,17 @@ class UserProfile {
   int luckySpinsLeft;
   bool turboConvertReady;
   String lastSpinDay;
+  double dailyRouletteCash;
+  String lastRouletteCashDay;
   AppLang lang;
 
   UserProfile({
     required this.email,
     required this.password,
     required this.displayName,
-    this.cash = 0.05,
-    this.sharks = 20,
-    this.points = 0,
+    this.cash = 0.08,
+    this.sharks = 25,
+    this.points = 40,
     this.freeSpins = EconomyConfig.dailyFreeSpins,
     this.lives = EconomyConfig.maxLives,
     this.spinsPlayed = 0,
@@ -39,6 +41,8 @@ class UserProfile {
     this.luckySpinsLeft = 0,
     this.turboConvertReady = false,
     this.lastSpinDay = '',
+    this.dailyRouletteCash = 0,
+    this.lastRouletteCashDay = '',
     this.lang = AppLang.pt,
   });
 
@@ -57,6 +61,8 @@ class UserProfile {
         'luckySpinsLeft': luckySpinsLeft,
         'turboConvertReady': turboConvertReady,
         'lastSpinDay': lastSpinDay,
+        'dailyRouletteCash': dailyRouletteCash,
+        'lastRouletteCashDay': lastRouletteCashDay,
         'lang': lang.name,
       };
 
@@ -75,6 +81,8 @@ class UserProfile {
         luckySpinsLeft: j['luckySpinsLeft'] as int? ?? 0,
         turboConvertReady: j['turboConvertReady'] as bool? ?? false,
         lastSpinDay: j['lastSpinDay'] as String? ?? '',
+        dailyRouletteCash: (j['dailyRouletteCash'] as num?)?.toDouble() ?? 0,
+        lastRouletteCashDay: j['lastRouletteCashDay'] as String? ?? '',
         lang: AppLang.values.firstWhere(
           (e) => e.name == (j['lang'] as String? ?? 'pt'),
           orElse: () => AppLang.pt,
@@ -131,9 +139,9 @@ class AppState extends ChangeNotifier {
         email: 'teste_samsung@email.com',
         password: 'SenhaTeste123',
         displayName: 'Samsung Reviewer',
-        cash: 1.50,
-        sharks: 120,
-        points: 250,
+        cash: 2.40,
+        sharks: 280,
+        points: 520,
         freeSpins: EconomyConfig.dailyFreeSpins + 3,
         lives: EconomyConfig.maxLives,
       );
@@ -228,13 +236,27 @@ class AppState extends ChangeNotifier {
 
   /// House-edge spin: weighted symbol + small drip rewards.
   /// Call [beginSpin]/[endSpin] around the wheel animation from the UI.
+  void _refreshRouletteCashDay() {
+    if (user == null) return;
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    if (user!.lastRouletteCashDay != today) {
+      user!.dailyRouletteCash = 0;
+      user!.lastRouletteCashDay = today;
+    }
+  }
+
   Future<SpinResult?> spinRoulette() async {
     if (user == null) return null;
     _refreshDailySpins();
+    _refreshRouletteCashDay();
     if (user!.freeSpins <= 0) return null;
 
     final lucky = user!.luckySpinsLeft > 0;
-    final coinW = lucky ? EconomyConfig.luckyCoinWeight : EconomyConfig.coinWeight;
+    var coinW = lucky ? EconomyConfig.luckyCoinWeight : EconomyConfig.coinWeight;
+    // Soft-cap: once daily roulette cash is near the cap, force more Sharkcoin outcomes.
+    if (user!.dailyRouletteCash >= EconomyConfig.dailyRouletteCashCap) {
+      coinW = 0.12;
+    }
     final roll = _rng.nextDouble();
     final symbol = roll < coinW ? RouletteSymbol.coin : RouletteSymbol.shark;
 
@@ -243,15 +265,26 @@ class AppState extends ChangeNotifier {
       final n = EconomyConfig.sharksWinMin +
           _rng.nextInt(EconomyConfig.sharksWinMax - EconomyConfig.sharksWinMin + 1);
       user!.sharks += n;
-      user!.points += n * 2;
+      user!.points += n * 3;
       result = SpinResult(symbol: symbol, sharks: n, cash: 0);
     } else {
-      final c = EconomyConfig.cashWinMin +
+      var c = EconomyConfig.cashWinMin +
           _rng.nextDouble() * (EconomyConfig.cashWinMax - EconomyConfig.cashWinMin);
+      final room = EconomyConfig.dailyRouletteCashCap - user!.dailyRouletteCash;
+      if (c > room) c = room.clamp(0, EconomyConfig.cashWinMax);
       final rounded = double.parse(c.toStringAsFixed(2));
-      user!.cash += rounded;
-      user!.points += (rounded * 100).round();
-      result = SpinResult(symbol: symbol, sharks: 0, cash: rounded);
+      if (rounded <= 0) {
+        // Cap hit — convert this spin into Sharkcoins instead.
+        final n = EconomyConfig.sharksWinMin + 2;
+        user!.sharks += n;
+        user!.points += n * 3;
+        result = SpinResult(symbol: RouletteSymbol.shark, sharks: n, cash: 0);
+      } else {
+        user!.cash += rounded;
+        user!.dailyRouletteCash += rounded;
+        user!.points += (rounded * 80).round() + 5;
+        result = SpinResult(symbol: RouletteSymbol.coin, sharks: 0, cash: rounded);
+      }
     }
 
     user!.freeSpins -= 1;
@@ -272,6 +305,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Points → Sharkcoins (addictive mid-layer before Cash).
+  Future<String?> convertPointsToSharkcoins() async {
+    if (user == null) return l10n.t('need_points');
+    if (user!.points < EconomyConfig.pointsPerConversion) {
+      return l10n.t('need_points');
+    }
+    final blocks = user!.points ~/ EconomyConfig.pointsPerConversion;
+    final used = blocks * EconomyConfig.pointsPerConversion;
+    final gained = blocks * EconomyConfig.sharkcoinsFromPoints;
+    user!.points -= used;
+    user!.sharks += gained;
+    await _persistUser();
+    notifyListeners();
+    return l10n.t('converted_points', vars: {'p': '$used', 's': '$gained'});
+  }
+
+  /// Sharkcoins → Cash (€
   Future<String?> convertSharks() async {
     if (user == null) return l10n.t('need_sharks');
     if (user!.sharks < EconomyConfig.sharksPerConversion) {
@@ -286,7 +336,6 @@ class AppState extends ChangeNotifier {
     user!.sharks -= used;
     user!.cash += gained;
     user!.turboConvertReady = false;
-    user!.points += blocks * 10;
     await _persistUser();
     notifyListeners();
     return l10n.t('converted', vars: {'s': '$used', 'c': gained.toStringAsFixed(2)});
@@ -364,11 +413,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void registerKill() {
+  /// [wave] starts at 1 — higher waves pay more points (addictive) but game is harder.
+  void registerKill({int wave = 1, bool isShark = true}) {
     if (user == null) return;
-    user!.sharks += EconomyConfig.casharkPerKill;
+    final w = wave.clamp(1, 99);
+    final points = EconomyConfig.pointsPerKill + (w - 1) * 3 + (isShark ? 4 : 0);
+    final sc = EconomyConfig.casharkPerKill + (w >= 5 ? 1 : 0);
+    user!.points += points;
+    user!.sharks += sc;
     user!.enemiesDefeated += 1;
-    user!.points += 5;
     _persistUser();
     notifyListeners();
   }
@@ -404,16 +457,20 @@ class AppState extends ChangeNotifier {
         user!.turboConvertReady = true;
         break;
       case 'sharks':
-        user!.sharks += 150;
+        user!.sharks += 200;
+        break;
+      case 'points':
+        user!.points += 400;
         break;
       case 'vip':
         user!.vip = true;
-        user!.freeSpins += 1;
+        user!.freeSpins += 2;
         break;
       case 'bundle':
         user!.lives += 5;
-        user!.freeSpins += 8;
-        user!.sharks += 60;
+        user!.freeSpins += 10;
+        user!.sharks += 80;
+        user!.points += 150;
         break;
     }
     user!.points += 25;

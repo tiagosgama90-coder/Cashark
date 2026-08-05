@@ -82,7 +82,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     await ads.showRewarded(onReward: () => state.addSpinsFromAd());
   }
 
-  Future<void> _convert() async {
+  Future<void> _convertPoints() async {
+    final state = context.read<AppState>();
+    final msg = await state.convertPointsToSharkcoins();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg ?? '')));
+  }
+
+  Future<void> _convertSharkcoins() async {
     final state = context.read<AppState>();
     final msg = await state.convertSharks();
     if (!mounted) return;
@@ -209,23 +216,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         children: [
                           _SideAction(
                             color: AppColors.sky,
-                            emoji: '🚀',
+                            emoji: '🦈',
                             label: l.t('play_win'),
+                            subtitle: 'Ocean Stardust 3D',
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(builder: (_) => const SpaceShooterGame()),
                               );
                             },
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
+                          _SideAction(
+                            color: AppColors.violet,
+                            emoji: '⭐',
+                            label: l.t('convert_points'),
+                            subtitle: l.t('convert_points_hint'),
+                            onTap: _convertPoints,
+                          ),
+                          const SizedBox(height: 8),
                           _SideAction(
                             color: AppColors.mint,
-                            emoji: '🔄',
+                            emoji: '💰',
                             label: l.t('convert'),
                             subtitle: l.t('convert_hint'),
-                            onTap: _convert,
+                            onTap: _convertSharkcoins,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           Text(
                             l.t('min_cash'),
                             textAlign: TextAlign.center,

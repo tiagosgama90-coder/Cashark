@@ -45,8 +45,8 @@ app.post('/v1/cashouts', async (req, res) => {
     const destination = String(body.destination || '').trim();
     const userEmail = String(body.userEmail || '').trim().toLowerCase();
 
-    if (!userEmail || !destination || !method || !(amountEuro >= 1)) {
-      return res.status(400).json({ error: 'INVALID_REQUEST', minAmount: 1 });
+    if (!userEmail || !destination || !method || !(amountEuro >= 10)) {
+      return res.status(400).json({ error: 'INVALID_REQUEST', minAmount: 10 });
     }
 
     let cashout = {
